@@ -253,7 +253,7 @@ def _parse_stock_entries(text: str) -> list[StockEntry]:
 # --------------------------------------------------------------------------- #
 def build_subject(today: datetime, article_count: int) -> str:
     return (
-        f"【株探・好悪材料】{today.year}年{today.month}月{today.day}日分"
+        f"【好悪材料】{today.year}年{today.month}月{today.day}日分"
         f"（{article_count}件）"
     )
 
