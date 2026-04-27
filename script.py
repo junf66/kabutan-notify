@@ -42,7 +42,10 @@ TITLE_KEYWORD = "好悪材料"
 SECTION_HEADING = "【好悪材料が混在】"
 SECTION_END_PATTERN = re.compile(r"(※|⇒⇒)")
 STOCK_HEADER_RE = re.compile(
-    r"([^\s<>\[\]【】＜＞［］]+?)\s*[<＜](\d{3,5})[>＞]\s*[\[［]([^\]］]+)[\]］]"
+    r"^[\s■]*([^\n<>\[\]【】＜＞［］■]+?)\s*"
+    r"[<＜]\s*([0-9A-Z]{4,5})\s*[>＞]\s*"
+    r"[\[［]([^\]］]+)[\]］]",
+    re.MULTILINE,
 )
 # 株探の記事リンクは ?b=<news_id> 形式（例: ?b=n202604271091）。
 # news_id 内に YYYYMMDD が含まれる。
