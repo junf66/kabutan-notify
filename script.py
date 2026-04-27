@@ -42,7 +42,7 @@ TITLE_KEYWORD = "好悪材料"
 SECTION_HEADING = "【好悪材料が混在】"
 SECTION_END_PATTERN = re.compile(r"(※|⇒⇒)")
 STOCK_HEADER_RE = re.compile(
-    r"([^\s<>\[\]【】]+?)\s*<(\d{3,5})>\s*\[([^\]]+)\]"
+    r"([^\s<>\[\]【】＜＞［］]+?)\s*[<＜](\d{3,5})[>＞]\s*[\[［]([^\]］]+)[\]］]"
 )
 # 株探の記事リンクは ?b=<news_id> 形式（例: ?b=n202604271091）。
 # news_id 内に YYYYMMDD が含まれる。
@@ -108,7 +108,7 @@ def list_target_articles(today: datetime) -> list[tuple[str, str]]:
     それで当日判定する。
     """
     yyyymmdd = today.strftime("%Y%m%d")
-    seen: set[str] = set()
+    seen_ids: set[str] = set()
     results: list[tuple[str, str]] = []
 
     for page in range(1, MAX_PAGES + 1):
@@ -131,11 +131,12 @@ def list_target_articles(today: datetime) -> list[tuple[str, str]]:
             if not title or TITLE_KEYWORD not in title:
                 continue
 
-            href = urljoin(BASE_URL, href_raw)
-            if href in seen:
+            if news_id in seen_ids:
                 continue
-            seen.add(href)
-            results.append((title, href))
+            seen_ids.add(news_id)
+            # URL は ?b=<news_id> に正規化
+            normalized = f"{BASE_URL}/news/marketnews/?b={news_id}"
+            results.append((title, normalized))
 
     return results
 
@@ -156,6 +157,14 @@ def parse_article(title: str, url: str) -> Article:
     else:
         # 2) セクションが無い場合は本文全体から銘柄ごとの開示情報を抽出
         stocks = _parse_stock_entries(body_text)
+
+    if not stocks:
+        # 構造が予想と異なる場合の診断ログ
+        head = body_text[:1200].replace("\n", "⏎")
+        print(
+            f"[DEBUG] body_text len={len(body_text)} head=<<{head}>>",
+            file=sys.stderr,
+        )
 
     return Article(title=title, url=url, stocks=stocks)
 
