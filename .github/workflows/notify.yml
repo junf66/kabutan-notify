@@ -1,0 +1,38 @@
+name: Kabutan 好悪材料 Notify
+
+on:
+  schedule:
+    # 月〜木 20:05 JST = 11:05 UTC
+    - cron: '5 11 * * 1-4'
+    # 日 13:35 JST = 04:35 UTC
+    - cron: '35 4 * * 0'
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run notifier
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          PYTHONIOENCODING: utf-8
+          TZ: Asia/Tokyo
+        run: python script.py
