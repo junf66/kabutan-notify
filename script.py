@@ -44,6 +44,10 @@ SECTION_END_PATTERN = re.compile(r"(※|⇒⇒)")
 STOCK_HEADER_RE = re.compile(
     r"([^\s<>\[\]【】]+?)\s*<(\d{3,5})>\s*\[([^\]]+)\]"
 )
+# 株探の記事リンクは ?b=<news_id> 形式（例: ?b=n202604271091）。
+# news_id 内に YYYYMMDD が含まれる。
+ARTICLE_HREF_RE = re.compile(r"[?&]b=([A-Za-z0-9]+)")
+NEWS_ID_DATE_RE = re.compile(r"(\d{8})")
 
 
 # --------------------------------------------------------------------------- #
@@ -99,7 +103,11 @@ def list_target_articles(today: datetime) -> list[tuple[str, str]]:
     """
     最大 MAX_PAGES ページ遡って、タイトルに TITLE_KEYWORD を含む
     当日付の (title, url) を返す。重複は除外。
+
+    記事 URL は `?b=<news_id>` 形式。news_id 内に YYYYMMDD が含まれるため、
+    それで当日判定する。
     """
+    yyyymmdd = today.strftime("%Y%m%d")
     seen: set[str] = set()
     results: list[tuple[str, str]] = []
 
@@ -108,42 +116,28 @@ def list_target_articles(today: datetime) -> list[tuple[str, str]]:
         html = http_get(url)
         soup = BeautifulSoup(html, "html.parser")
 
-        rows = soup.select("table.s_news_list tbody tr")
-        if not rows:
-            # 構造が変わっていた場合のフォールバック
-            rows = soup.find_all("tr")
-
-        for tr in rows:
-            a = tr.find(
-                "a", href=re.compile(r"/news/marketnews/\d+")
-            )
-            if not a:
+        for a in soup.find_all("a", href=True):
+            href_raw = a["href"]
+            m = ARTICLE_HREF_RE.search(href_raw)
+            if not m:
                 continue
+            news_id = m.group(1)
+
+            date_match = NEWS_ID_DATE_RE.search(news_id)
+            if not date_match or date_match.group(1) != yyyymmdd:
+                continue
+
             title = a.get_text(strip=True)
-            if TITLE_KEYWORD not in title:
+            if not title or TITLE_KEYWORD not in title:
                 continue
 
-            href = urljoin(BASE_URL, a["href"])
+            href = urljoin(BASE_URL, href_raw)
             if href in seen:
                 continue
-
-            row_text = tr.get_text(" ", strip=True)
-            if not _row_matches_today(row_text, today):
-                continue
-
             seen.add(href)
             results.append((title, href))
 
     return results
-
-
-def _row_matches_today(row_text: str, today: datetime) -> bool:
-    """行テキスト中の MM/DD が当日と一致するか。"""
-    for m in re.finditer(r"(\d{1,2})/(\d{1,2})", row_text):
-        month, day = int(m.group(1)), int(m.group(2))
-        if month == today.month and day == today.day:
-            return True
-    return False
 
 
 # --------------------------------------------------------------------------- #
