@@ -2,10 +2,12 @@ name: Kabutan 好悪材料 Notify
 
 on:
   schedule:
-    # 月〜木 20:05 JST = 11:05 UTC
+    # 月〜木 20:05 JST = 11:05 UTC（通常営業日の夕方配信）
     - cron: '5 11 * * 1-4'
-    # 日 13:35 JST = 04:35 UTC
+    # 日 13:35 JST = 04:35 UTC（月曜分の事前配信）
     - cron: '35 4 * * 0'
+    # 月〜金 13:35 JST = 04:35 UTC（祝日のみ実行 / script 側で判定）
+    - cron: '35 4 * * 1-5'
   workflow_dispatch:
 
 jobs:
@@ -35,4 +37,5 @@ jobs:
           MAIL_TO: ${{ secrets.MAIL_TO }}
           PYTHONIOENCODING: utf-8
           TZ: Asia/Tokyo
+          TRIGGER_SCHEDULE: ${{ github.event.schedule || '' }}
         run: python script.py

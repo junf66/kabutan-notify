@@ -21,6 +21,11 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
+try:
+    import jpholiday  # 日本の祝日判定
+except ImportError:
+    jpholiday = None  # type: ignore
+
 BASE_URL = "https://kabutan.jp"
 LIST_URL = "https://kabutan.jp/news/marketnews/?category=9"
 STOCK_URL_TEMPLATE = "https://kabutan.jp/stock/?code={code}"
@@ -328,9 +333,54 @@ def send_mail(subject: str, plain: str, html: str) -> None:
 # --------------------------------------------------------------------------- #
 # メイン
 # --------------------------------------------------------------------------- #
+def _is_jp_holiday(d: datetime) -> bool:
+    if jpholiday is None:
+        return False
+    return jpholiday.is_holiday(d.date())
+
+
+def _should_run(today: datetime) -> tuple[bool, str]:
+    """
+    `TRIGGER_SCHEDULE` env と祝日判定で、このランで送信処理を行うかを決める。
+
+    - `5 11 * * 1-4`（Mon-Thu 20:05）: 祝日ならスキップ（13:35 で対応済）
+    - `35 4 * * 1-5`（Mon-Fri 13:35）: 祝日のみ実行
+    - `35 4 * * 0`（Sun 13:35）: 常に実行
+    - workflow_dispatch / 不明: 常に実行
+    """
+    schedule = os.environ.get("TRIGGER_SCHEDULE", "").strip()
+    if not schedule:
+        return True, "manual / unknown trigger → run"
+
+    is_holiday = _is_jp_holiday(today)
+
+    if schedule == "5 11 * * 1-4":
+        if is_holiday:
+            return False, (
+                "20:05 cron だが本日は祝日 (13:35 cron で対応済) → skip"
+            )
+        return True, "20:05 cron / 平日 → run"
+
+    if schedule == "35 4 * * 1-5":
+        if not is_holiday:
+            return False, "13:35 cron だが本日は祝日でない → skip"
+        return True, "13:35 cron / 祝日 → run"
+
+    if schedule == "35 4 * * 0":
+        return True, "13:35 Sun cron → run"
+
+    return True, f"unknown schedule '{schedule}' → run"
+
+
 def main() -> int:
     today = datetime.now(JST)
     print(f"[INFO] today (JST) = {today.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"[INFO] is_jp_holiday = {_is_jp_holiday(today)}")
+
+    ok, reason = _should_run(today)
+    print(f"[INFO] gate: {reason}")
+    if not ok:
+        return 0
 
     targets = list_target_articles(today)
     print(f"[INFO] 対象記事候補: {len(targets)} 件")
