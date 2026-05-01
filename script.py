@@ -288,9 +288,13 @@ def build_html_body(articles: list[Article]) -> str:
     ]
     for art in articles:
         parts.append(
-            f"<h2 style=\"border-bottom:2px solid #333;padding-bottom:4px;\">"
+            f"<h2 style=\"border-bottom:2px solid #333;padding-bottom:4px;margin-bottom:4px;\">"
             f"<a href=\"{esc(art.url)}\" style=\"color:#333;text-decoration:none;\">"
             f"{esc(art.title)}</a></h2>"
+        )
+        parts.append(
+            f"<p style=\"margin:0 0 12px 0;font-size:0.9em;\">"
+            f"<a href=\"{esc(art.url)}\">{esc(art.url)}</a></p>"
         )
         for s in art.stocks:
             stock_url = STOCK_URL_TEMPLATE.format(code=s.code)
