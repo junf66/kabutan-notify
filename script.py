@@ -374,13 +374,31 @@ def _should_run(today: datetime) -> tuple[bool, str]:
 
 def main() -> int:
     today = datetime.now(JST)
+
+    # workflow_dispatch で target_date が指定されている場合はその日付を使う
+    target_override = os.environ.get("TARGET_DATE", "").strip()
+    if target_override:
+        try:
+            today = datetime.strptime(target_override, "%Y-%m-%d").replace(
+                tzinfo=JST
+            )
+            print(f"[INFO] TARGET_DATE override = {target_override}")
+        except ValueError as e:
+            print(
+                f"[ERROR] TARGET_DATE='{target_override}' を解釈できません: {e}",
+                file=sys.stderr,
+            )
+            return 1
+
     print(f"[INFO] today (JST) = {today.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"[INFO] is_jp_holiday = {_is_jp_holiday(today)}")
 
-    ok, reason = _should_run(today)
-    print(f"[INFO] gate: {reason}")
-    if not ok:
-        return 0
+    # target_date 指定時はゲート判定を行わない（手動リカバリ用）
+    if not target_override:
+        ok, reason = _should_run(today)
+        print(f"[INFO] gate: {reason}")
+        if not ok:
+            return 0
 
     targets = list_target_articles(today)
     print(f"[INFO] 対象記事候補: {len(targets)} 件")

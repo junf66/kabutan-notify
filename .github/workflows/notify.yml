@@ -9,6 +9,11 @@ on:
     # 月〜金 13:35 JST = 04:35 UTC（祝日のみ実行 / script 側で判定）
     - cron: '35 4 * * 1-5'
   workflow_dispatch:
+    inputs:
+      target_date:
+        description: '対象日を YYYY-MM-DD で指定（空欄なら当日）'
+        required: false
+        default: ''
 
 jobs:
   notify:
@@ -38,4 +43,5 @@ jobs:
           PYTHONIOENCODING: utf-8
           TZ: Asia/Tokyo
           TRIGGER_SCHEDULE: ${{ github.event.schedule || '' }}
+          TARGET_DATE: ${{ github.event.inputs.target_date || '' }}
         run: python script.py
