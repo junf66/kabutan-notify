@@ -161,9 +161,14 @@ def parse_article(title: str, url: str) -> Article:
     # 1) 「【好悪材料が混在】」セクションを優先抽出
     section_text = _extract_section(body_text, SECTION_HEADING)
     if section_text:
+        print(
+            f"[INFO] 「{SECTION_HEADING}」セクションを抽出"
+            f" (length={len(section_text)})"
+        )
         stocks = _parse_stock_entries(section_text)
     else:
         # 2) セクションが無い場合は本文全体から銘柄ごとの開示情報を抽出
+        print("[INFO] 「混在」セクション無し → 本文全体から銘柄抽出")
         stocks = _parse_stock_entries(body_text)
 
     if not stocks:
@@ -220,10 +225,6 @@ def _extract_section(text: str, heading: str) -> str | None:
     end_match = SECTION_END_PATTERN.search(rest)
     if end_match:
         rest = rest[: end_match.start()]
-    # 別の【...】見出しが現れたらそこで打ち切る
-    other_heading = re.search(r"\n【[^】]+】", rest)
-    if other_heading:
-        rest = rest[: other_heading.start()]
     return rest.strip() or None
 
 
