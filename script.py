@@ -183,7 +183,11 @@ def parse_article(title: str, url: str) -> Article:
 
 
 def _extract_body_text(soup: BeautifulSoup) -> str:
-    """記事本文の text を取得。"""
+    """記事本文の text を取得。
+
+    複数の候補セレクタを試し、`【悪材料】` まで含むなど **最も内容量の大きい**
+    要素を採用する（株探は記事種別ごとに body コンテナが異なる）。
+    """
     candidates = [
         "#shijo",
         "div#shijo",
@@ -192,27 +196,43 @@ def _extract_body_text(soup: BeautifulSoup) -> str:
         "div.news_contents",
         "article",
         "div.news_box",
+        "div#main",
+        "main",
     ]
-    node = None
+
+    def _node_text(node) -> str:
+        for tag in node.select("script, style, .ad, .adsbygoogle"):
+            tag.decompose()
+        t = node.get_text("\n", strip=False)
+        t = re.sub(r"\r\n?", "\n", t)
+        t = "\n".join(line.strip() for line in t.split("\n"))
+        t = re.sub(r"\n{3,}", "\n\n", t)
+        return t.strip()
+
+    best_sel = None
+    best_text = ""
     for sel in candidates:
         node = soup.select_one(sel)
-        if node:
-            break
-    if node is None:
-        node = soup.body or soup
+        if not node:
+            continue
+        t = _node_text(node)
+        if len(t) > len(best_text):
+            best_text = t
+            best_sel = sel
 
-    # 不要要素を除去
-    for tag in node.select("script, style, .ad, .adsbygoogle"):
-        tag.decompose()
+    if not best_text and soup.body is not None:
+        best_sel = "body"
+        best_text = _node_text(soup.body)
 
-    text = node.get_text("\n", strip=False)
-    # 改行を正規化
-    text = re.sub(r"\r\n?", "\n", text)
-    # 行頭末尾の空白除去
-    text = "\n".join(line.strip() for line in text.split("\n"))
-    # 連続空行を圧縮
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
+    print(
+        f"[DEBUG] body container = {best_sel}, length = {len(best_text)}",
+        file=sys.stderr,
+    )
+    for kw in ("【好材料】", "【悪材料】", SECTION_HEADING, "※", "⇒⇒"):
+        idx = best_text.find(kw)
+        print(f"[DEBUG]   '{kw}' position = {idx}", file=sys.stderr)
+
+    return best_text
 
 
 def _extract_section(text: str, heading: str) -> str | None:
