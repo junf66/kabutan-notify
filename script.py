@@ -39,6 +39,7 @@ USER_AGENT = (
 JST = timezone(timedelta(hours=9))
 
 MAX_PAGES = 3
+MAX_PAGES_OVERRIDE = 20  # target_date 指定時の遡り上限
 REQUEST_TIMEOUT = 30
 RETRY_COUNT = 3
 RETRY_BACKOFF = 2.0
@@ -107,9 +108,11 @@ def http_get(url: str) -> str:
 # --------------------------------------------------------------------------- #
 # 一覧ページ
 # --------------------------------------------------------------------------- #
-def list_target_articles(today: datetime) -> list[tuple[str, str]]:
+def list_target_articles(
+    today: datetime, max_pages: int = MAX_PAGES
+) -> list[tuple[str, str]]:
     """
-    最大 MAX_PAGES ページ遡って、タイトルに TITLE_KEYWORD を含む
+    最大 max_pages ページ遡って、タイトルに TITLE_KEYWORD を含む
     当日付の (title, url) を返す。重複は除外。
 
     記事 URL は `?b=<news_id>` 形式。news_id 内に YYYYMMDD が含まれるため、
@@ -119,7 +122,7 @@ def list_target_articles(today: datetime) -> list[tuple[str, str]]:
     seen_ids: set[str] = set()
     results: list[tuple[str, str]] = []
 
-    for page in range(1, MAX_PAGES + 1):
+    for page in range(1, max_pages + 1):
         url = LIST_URL if page == 1 else f"{LIST_URL}&page={page}"
         html = http_get(url)
         soup = BeautifulSoup(html, "html.parser")
@@ -434,7 +437,10 @@ def main() -> int:
         if not ok:
             return 0
 
-    targets = list_target_articles(today)
+    # target_date 指定時は遡り上限を広げる（過去日のリカバリ用）
+    max_pages = MAX_PAGES_OVERRIDE if target_override else MAX_PAGES
+    print(f"[INFO] 一覧スキャン上限ページ数: {max_pages}")
+    targets = list_target_articles(today, max_pages=max_pages)
     print(f"[INFO] 対象記事候補: {len(targets)} 件")
     for t, u in targets:
         print(f"  - {t}  {u}")
