@@ -14,6 +14,10 @@ on:
         description: '対象日を YYYY-MM-DD で指定（空欄なら当日）'
         required: false
         default: ''
+      news_id:
+        description: 'news_id を直接指定 (例 n202605010243) — 指定時は一覧スキップ'
+        required: false
+        default: ''
 
 jobs:
   notify:
@@ -44,4 +48,5 @@ jobs:
           TZ: Asia/Tokyo
           TRIGGER_SCHEDULE: ${{ github.event.schedule || '' }}
           TARGET_DATE: ${{ github.event.inputs.target_date || '' }}
+          NEWS_ID: ${{ github.event.inputs.news_id || '' }}
         run: python script.py
