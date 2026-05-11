@@ -158,24 +158,23 @@ def parse_article(title: str, url: str) -> Article:
 
     body_text = _extract_body_text(soup)
 
-    # 1) 「【好悪材料が混在】」セクションを優先抽出
+    # 「【好悪材料が混在】」セクションのみ抽出する。
+    # セクションが無い記事 (好材料/悪材料 のみの記事) はスキップ扱い。
     section_text = _extract_section(body_text, SECTION_HEADING)
-    if section_text:
-        print(
-            f"[INFO] 「{SECTION_HEADING}」セクションを抽出"
-            f" (length={len(section_text)})"
-        )
-        stocks = _parse_stock_entries(section_text)
-    else:
-        # 2) セクションが無い場合は本文全体から銘柄ごとの開示情報を抽出
-        print("[INFO] 「混在」セクション無し → 本文全体から銘柄抽出")
-        stocks = _parse_stock_entries(body_text)
+    if section_text is None:
+        print(f"[INFO] 「{SECTION_HEADING}」セクション無し → 当該記事をスキップ")
+        return Article(title=title, url=url, stocks=[])
+
+    print(
+        f"[INFO] 「{SECTION_HEADING}」セクションを抽出"
+        f" (length={len(section_text)})"
+    )
+    stocks = _parse_stock_entries(section_text)
 
     if not stocks:
-        # 構造が予想と異なる場合の診断ログ
-        head = body_text[:1200].replace("\n", "⏎")
+        head = section_text[:600].replace("\n", "⏎")
         print(
-            f"[DEBUG] body_text len={len(body_text)} head=<<{head}>>",
+            f"[DEBUG] section text but 0 stocks: <<{head}>>",
             file=sys.stderr,
         )
 
@@ -236,15 +235,25 @@ def _extract_body_text(soup: BeautifulSoup) -> str:
 
 
 def _extract_section(text: str, heading: str) -> str | None:
-    """heading 直後から ※ または ⇒⇒ または末尾の手前までを返す。"""
+    """heading 直後から、※ / ⇒⇒ / 次の【...】見出し / 末尾 のうち最初に
+    出現したものの手前までを返す。
+    """
     idx = text.find(heading)
     if idx < 0:
         return None
     start = idx + len(heading)
     rest = text[start:]
+
+    cut_positions = []
     end_match = SECTION_END_PATTERN.search(rest)
     if end_match:
-        rest = rest[: end_match.start()]
+        cut_positions.append(end_match.start())
+    next_heading = re.search(r"【[^】]+】", rest)
+    if next_heading:
+        cut_positions.append(next_heading.start())
+    if cut_positions:
+        rest = rest[: min(cut_positions)]
+
     return rest.strip() or None
 
 
