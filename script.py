@@ -21,6 +21,16 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
+# curl_cffi: Chrome の TLS / HTTP/2 フィンガープリントを模倣して AWS WAF などの
+# bot 判定を回避する
+try:
+    from curl_cffi import requests as cffi_requests  # type: ignore
+
+    HAS_CURL_CFFI = True
+except ImportError:
+    cffi_requests = None  # type: ignore
+    HAS_CURL_CFFI = False
+
 try:
     import jpholiday  # 日本の祝日判定
 except ImportError:
@@ -38,8 +48,14 @@ USER_AGENT = (
 
 JST = timezone(timedelta(hours=9))
 
-# 全リクエストで cookie を共有するセッション（kabutan の bot 対策回避用）
-_session = requests.Session()
+# 全リクエストで cookie を共有するセッション（kabutan の bot 対策回避用）。
+# curl_cffi が使える場合は Chrome の TLS/HTTP2 フィンガープリントを模倣する。
+if HAS_CURL_CFFI:
+    _session = cffi_requests.Session(impersonate="chrome124")
+    print("[INFO] HTTP client: curl_cffi (impersonate=chrome124)")
+else:
+    _session = requests.Session()
+    print("[WARN] HTTP client: requests (curl_cffi unavailable)")
 _session_primed = False
 
 MAX_PAGES = 3
@@ -125,7 +141,7 @@ def _prime_session() -> None:
         )
         _session_primed = True
         print(f"[INFO] session primed (cookies={len(_session.cookies)})")
-    except requests.RequestException as e:
+    except Exception as e:
         print(f"[WARN] session prime failed: {e}", file=sys.stderr)
 
 
@@ -150,7 +166,7 @@ def http_get(url: str, referer: str | None = None) -> str:
             if not r.encoding or r.encoding.lower() == "iso-8859-1":
                 r.encoding = r.apparent_encoding or "utf-8"
             return r.text
-        except requests.RequestException as e:
+        except Exception as e:
             last_err = e
             if attempt < RETRY_COUNT - 1:
                 time.sleep(RETRY_BACKOFF * (2 ** attempt))
