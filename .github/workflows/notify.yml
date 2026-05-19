@@ -1,13 +1,14 @@
 name: Kabutan 好悪材料 Notify
 
+# 2026-05-19: kabutan が AWS WAF (Human Verification) でスクレイピングを
+# 明示的に拒否するようになったため、scheduled cron は無効化しています。
+# manual (workflow_dispatch) は残してあるので、将来別ソース (TDnet 等) に
+# 作り替えるときの足場として利用可。
 on:
-  schedule:
-    # 月〜木 20:05 JST = 11:05 UTC（通常営業日の夕方配信）
-    - cron: '5 11 * * 1-4'
-    # 日 13:35 JST = 04:35 UTC（月曜分の事前配信）
-    - cron: '35 4 * * 0'
-    # 月〜金 13:35 JST = 04:35 UTC（祝日のみ実行 / script 側で判定）
-    - cron: '35 4 * * 1-5'
+  # schedule:
+  #   - cron: '5 11 * * 1-4'   # 月〜木 20:05 JST
+  #   - cron: '35 4 * * 0'     # 日 13:35 JST
+  #   - cron: '35 4 * * 1-5'   # 月〜金 13:35 JST (祝日のみ)
   workflow_dispatch:
     inputs:
       target_date:
