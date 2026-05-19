@@ -80,15 +80,27 @@ class Article:
 # --------------------------------------------------------------------------- #
 # HTTP
 # --------------------------------------------------------------------------- #
-def http_get(url: str) -> str:
+def http_get(url: str, referer: str | None = None) -> str:
     headers = {
         "User-Agent": USER_AGENT,
-        "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
         "Accept": (
             "text/html,application/xhtml+xml,application/xml;q=0.9,"
-            "image/webp,*/*;q=0.8"
+            "image/avif,image/webp,*/*;q=0.8"
         ),
+        "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin" if referer else "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "Connection": "keep-alive",
     }
+    if referer:
+        headers["Referer"] = referer
+
     last_err: Exception | None = None
     for attempt in range(RETRY_COUNT):
         try:
@@ -156,7 +168,7 @@ def list_target_articles(
 # 記事ページ
 # --------------------------------------------------------------------------- #
 def parse_article(title: str, url: str) -> Article:
-    html = http_get(url)
+    html = http_get(url, referer=LIST_URL)
     soup = BeautifulSoup(html, "html.parser")
 
     # NEWS_ID 経由でタイトル不明なときは記事ページから取得
