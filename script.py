@@ -38,6 +38,10 @@ USER_AGENT = (
 
 JST = timezone(timedelta(hours=9))
 
+# 全リクエストで cookie を共有するセッション（kabutan の bot 対策回避用）
+_session = requests.Session()
+_session_primed = False
+
 MAX_PAGES = 3
 MAX_PAGES_OVERRIDE = 20  # target_date 指定時の遡り上限
 REQUEST_TIMEOUT = 30
@@ -80,7 +84,7 @@ class Article:
 # --------------------------------------------------------------------------- #
 # HTTP
 # --------------------------------------------------------------------------- #
-def http_get(url: str, referer: str | None = None) -> str:
+def _build_headers(referer: str | None) -> dict[str, str]:
     headers = {
         "User-Agent": USER_AGENT,
         "Accept": (
@@ -100,11 +104,47 @@ def http_get(url: str, referer: str | None = None) -> str:
     }
     if referer:
         headers["Referer"] = referer
+    return headers
 
+
+def _prime_session() -> None:
+    """株探トップにアクセスして cookie を取得（bot 判定対策）。"""
+    global _session_primed
+    if _session_primed:
+        return
+    try:
+        _session.get(
+            BASE_URL + "/",
+            headers=_build_headers(None),
+            timeout=REQUEST_TIMEOUT,
+        )
+        _session.get(
+            LIST_URL,
+            headers=_build_headers(BASE_URL + "/"),
+            timeout=REQUEST_TIMEOUT,
+        )
+        _session_primed = True
+        print(f"[INFO] session primed (cookies={len(_session.cookies)})")
+    except requests.RequestException as e:
+        print(f"[WARN] session prime failed: {e}", file=sys.stderr)
+
+
+def http_get(url: str, referer: str | None = None) -> str:
+    _prime_session()
+    headers = _build_headers(referer)
     last_err: Exception | None = None
     for attempt in range(RETRY_COUNT):
         try:
-            r = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+            r = _session.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+            if r.status_code == 405:
+                # 405 が返るときは bot 判定の可能性が高いので診断情報を出力
+                print(
+                    f"[DEBUG] 405 url={url} server={r.headers.get('Server')} "
+                    f"cf-ray={r.headers.get('CF-Ray')} "
+                    f"set-cookie={'yes' if r.headers.get('Set-Cookie') else 'no'} "
+                    f"body_head={r.text[:200]!r}",
+                    file=sys.stderr,
+                )
             r.raise_for_status()
             # 文字化け対策: meta charset を見て decode させる
             if not r.encoding or r.encoding.lower() == "iso-8859-1":
